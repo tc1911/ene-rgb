@@ -1,0 +1,12 @@
+[Unit]
+Description=ENE 6K7750 ARGB keep-alive
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/ene-rgb-daemon
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target

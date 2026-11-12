@@ -1,0 +1,156 @@
+#!/usr/bin/env python3
+"""ene-rgb 控制面板：颜色、亮度、关灯。基于 libadwaita，跟随系统深浅色。
+
+只写 ~/.config/ene-rgb/state.json，守护进程一秒内自己读到，不用重启服务。
+"""
+import json
+import os
+import subprocess
+
+import gi
+
+gi.require_version("Gtk", "4.0")
+gi.require_version("Adw", "1")
+from gi.repository import Adw, Gdk, GLib, Gtk  # noqa: E402
+
+CFG = os.path.join(
+    os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config")), "ene-rgb"
+)
+STATE = os.path.join(CFG, "state.json")
+UNIT = "ene-rgb.service"
+DEFAULT = {"r": 0, "g": 110, "b": 140, "bright": 100, "on": True}
+
+
+def load():
+    st = dict(DEFAULT)
+    try:
+        with open(STATE) as f:
+            st.update(json.load(f))
+    except Exception:
+        pass
+    return st
+
+
+def save(st):
+    os.makedirs(CFG, exist_ok=True)
+    tmp = STATE + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(st, f)
+    os.replace(tmp, STATE)
+
+
+def scaled(st):
+    k = max(0, min(100, st.get("bright", 100))) / 100.0
+    return tuple(
+        max(0, min(255, round(st.get(c, 0) * k))) for c in ("r", "g", "b")
+    )
+
+
+class Win(Adw.ApplicationWindow):
+    def __init__(self, app):
+        super().__init__(application=app, title="机箱灯效", default_width=380)
+        self.st = load()
+        self.pending = 0
+        self._busy = True
+
+        view = Adw.ToolbarView()
+        view.add_top_bar(Adw.HeaderBar())
+        self.set_content(view)
+
+        page = Adw.PreferencesPage()
+        view.set_content(page)
+
+        grp = Adw.PreferencesGroup(title="灯效")
+        page.add(grp)
+
+        self.color_row = Adw.ActionRow(title="颜色")
+        self.btn = Gtk.ColorDialogButton(dialog=Gtk.ColorDialog(with_alpha=False))
+        self.btn.set_rgba(self._rgba())
+        self.btn.set_valign(Gtk.Align.CENTER)
+        self.btn.connect("notify::rgba", self.on_color)
+        self.color_row.add_suffix(self.btn)
+        grp.add(self.color_row)
+
+        self.bright_row = Adw.ActionRow(title="亮度")
+        self.scale = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 5, 100, 5)
+        self.scale.set_value(self.st["bright"])
+        self.scale.set_size_request(180, -1)
+        self.scale.set_draw_value(True)
+        self.scale.set_valign(Gtk.Align.CENTER)
+        self.scale.connect("value-changed", self.on_bright)
+        self.bright_row.add_suffix(self.scale)
+        grp.add(self.bright_row)
+
+        self.off_row = Adw.SwitchRow(title="关灯", subtitle="灯全灭，配置保留")
+        self.off_row.set_active(not self.st.get("on", True))
+        self.off_row.connect("notify::active", self.on_off)
+        grp.add(self.off_row)
+
+        self._busy = False
+        self.refresh()
+
+    def _rgba(self):
+        c = Gdk.RGBA()
+        c.parse("#%02X%02X%02X" % (self.st["r"], self.st["g"], self.st["b"]))
+        return c
+
+    def refresh(self):
+        if not self.st.get("on", True):
+            self.color_row.set_subtitle("已关灯")
+        else:
+            self.color_row.set_subtitle("#%02X%02X%02X" % scaled(self.st))
+
+    def on_color(self, btn, _p):
+        if self._busy:
+            return
+        c = btn.get_rgba()
+        self.st["r"] = round(c.red * 255)
+        self.st["g"] = round(c.green * 255)
+        self.st["b"] = round(c.blue * 255)
+        self.refresh()
+        self.queue_apply()
+
+    def on_bright(self, scale):
+        if self._busy:
+            return
+        self.st["bright"] = int(round(scale.get_value()))
+        self.refresh()
+        self.queue_apply()
+
+    def on_off(self, row, _p):
+        if self._busy:
+            return
+        self.st["on"] = not row.get_active()
+        self.refresh()
+        self.queue_apply()
+
+    def queue_apply(self):
+        if self.pending:
+            GLib.source_remove(self.pending)
+        self.pending = GLib.timeout_add(250, self.apply)
+
+    def apply(self):
+        self.pending = 0
+        save(self.st)
+        active = subprocess.run(
+            ["systemctl", "--user", "is-active", "--quiet", UNIT]
+        ).returncode == 0
+        if not active:
+            subprocess.run(
+                ["systemctl", "--user", "start", UNIT], capture_output=True
+            )
+        return False
+
+
+class App(Adw.Application):
+    def __init__(self):
+        super().__init__(application_id="io.github.tc1911.EneRgb")
+
+    def do_activate(self):
+        win = self.props.active_window or Win(self)
+        win.present()
+
+
+if __name__ == "__main__":
+    Adw.StyleManager.get_default().set_color_scheme(Adw.ColorScheme.DEFAULT)
+    App().run()

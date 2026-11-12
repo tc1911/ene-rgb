@@ -1,0 +1,127 @@
+#!/usr/bin/env python3
+"""ene-rgb 常亮守护进程。
+
+每秒把 ~/.config/ene-rgb/state.json 里的颜色重刷一遍（芯片一次性刷色会在
+1~2 分钟后进入睡眠），并在设备重新枚举（休眠唤醒、USB 重连）后自动重新打开。
+"""
+import importlib.util
+import json
+import os
+import signal
+import sys
+import time
+
+import usb.core
+
+DRIVER = "/usr/share/ene-rgb/ene_fanctl.py"
+STATE = os.path.join(
+    os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config")),
+    "ene-rgb", "state.json",
+)
+FALLBACK = {"r": 0, "g": 110, "b": 140, "bright": 100, "on": True}
+INTERVAL = 1.0
+
+
+def load_driver():
+    spec = importlib.util.spec_from_file_location("ene_fanctl", DRIVER)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def read_state():
+    st = dict(FALLBACK)
+    try:
+        with open(STATE) as f:
+            st.update(json.load(f))
+    except Exception:
+        pass
+    return st
+
+
+def target(st):
+    if not st.get("on", True):
+        return (0, 0, 0)
+    k = max(0, min(100, st.get("bright", 100))) / 100.0
+    out = []
+    for c in ("r", "g", "b"):
+        out.append(max(0, min(255, round(st.get(c, 0) * k))))
+    return tuple(out)
+
+
+class Device:
+    def __init__(self, drv):
+        self.drv = drv
+        self.dev = None
+        self.gs = None
+        self.bufs = None
+        self.color = None
+
+    def open(self):
+        self.dev = self.drv.open_dev()
+        self.gs = self.drv.groups(self.dev)
+        self.bufs = None
+
+    def ensure(self):
+        if self.dev is None:
+            self.open()
+            return
+        cur = usb.core.find(idVendor=self.drv.VID, idProduct=self.drv.PID)
+        if cur is None or cur.address != self.dev.address:
+            self.dev = None
+            self.open()
+
+    def close(self):
+        self.dev = None
+        self.gs = None
+        self.bufs = None
+        self.color = None
+
+    def paint(self, rgb):
+        if self.bufs is None or self.color != rgb:
+            r, g, b = rgb
+            self.bufs = []
+            for n in self.gs:
+                buf = bytearray(n * 3)
+                for i in range(n):
+                    self.drv.put(buf, i, r, g, b)
+                self.bufs.append(buf)
+            self.color = rgb
+        for gi, buf in enumerate(self.bufs):
+            self.drv.write_leds(self.dev, self.gs, gi, buf)
+
+
+def main():
+    drv = load_driver()
+    stop = [False]
+
+    def handler(*_a):
+        stop[0] = True
+
+    signal.signal(signal.SIGTERM, handler)
+    signal.signal(signal.SIGINT, handler)
+
+    dev = Device(drv)
+    while not stop[0]:
+        rgb = target(read_state())
+        try:
+            dev.ensure()
+            dev.paint(rgb)
+        except Exception as e:
+            print(f"ene-rgb: {e.__class__.__name__}: {e}", file=sys.stderr, flush=True)
+            dev.close()
+            time.sleep(2)
+            continue
+        time.sleep(INTERVAL)
+
+    if dev.dev is not None:
+        try:
+            dev.paint((0, 0, 0))
+            dev.drv.dev_attach = None
+        except Exception:
+            pass
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
