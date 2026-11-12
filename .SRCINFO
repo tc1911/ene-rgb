@@ -1,0 +1,16 @@
+pkgbase = ene-rgb
+	pkgdesc = 铭瑄等主板 ENE 6K7750 板载 ARGB 灯效控制（常亮守护进程 + GTK4 面板）
+	pkgver = 1.0.0
+	pkgrel = 1
+	url = https://github.com/tc1911/ene-rgb
+	arch = any
+	license = MIT
+	makedepends = git
+	depends = python-pyusb
+	depends = python-gobject
+	depends = gtk4
+	depends = libadwaita
+	source = git+https://github.com/tc1911/ene-rgb.git#tag=v1.0.0
+	sha256sums = SKIP
+
+pkgname = ene-rgb
