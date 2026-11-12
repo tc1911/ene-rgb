@@ -5,12 +5,11 @@ pkgbase = ene-rgb
 	url = https://github.com/tc1911/ene-rgb
 	arch = any
 	license = MIT
-	makedepends = git
 	depends = python-pyusb
 	depends = python-gobject
 	depends = gtk4
 	depends = libadwaita
-	source = git+https://github.com/tc1911/ene-rgb.git#tag=v1.0.0
-	sha256sums = SKIP
+	source = ene-rgb-1.0.0.tar.gz::https://github.com/tc1911/ene-rgb/archive/v1.0.0.tar.gz
+	sha256sums = 5933420c060b7e06b57be55be740e0ab0fc826f1b4cd67cbabd120791d428341
 
 pkgname = ene-rgb

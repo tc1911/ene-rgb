@@ -1,0 +1,10 @@
+ene-rgb
+Copyright (C) 2026 tc1911
+
+本项目的底层 USB 协议实现 src/ene_fanctl.py 来自上游项目
+teamlocabit/ene-6k7750-rgb（MIT License），由其对铭瑄 SK_64.dll 的逆向结果
+改写而来，未做功能性修改。上游作者与本仓库均不建议通过该协议触碰风扇转速。
+
+    ene-6k7750-rgb — https://github.com/teamlocabit/ene-6k7750-rgb
+
+本项目的守护进程、GTK4 面板、systemd/udev 集成由 tc1911 编写。

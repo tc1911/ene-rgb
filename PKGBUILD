@@ -7,12 +7,11 @@ arch=('any')
 url="https://github.com/tc1911/ene-rgb"
 license=('MIT')
 depends=('python-pyusb' 'python-gobject' 'gtk4' 'libadwaita')
-makedepends=('git')
-source=("git+$url.git#tag=v$pkgver")
-sha256sums=('SKIP')
+source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
+sha256sums=('5933420c060b7e06b57be55be740e0ab0fc826f1b4cd67cbabd120791d428341')
 
 package() {
-  local src="$srcdir/$pkgname"
+  local src="$srcdir/$pkgname-$pkgver"
 
   install -Dm755 "$src/src/ene-rgb" "$pkgdir/usr/bin/ene-rgb"
   install -Dm755 "$src/src/ene-rgb-daemon" "$pkgdir/usr/bin/ene-rgb-daemon"

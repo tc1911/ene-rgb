@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=机箱灯效
+Name[en]=Case Lighting
+Comment=调节 ENE 6K7750 板载 ARGB 的颜色和亮度
+Comment[en]=Control the ENE 6K7750 onboard ARGB color and brightness
+Exec=ene-rgb-gui
+Icon=preferences-color
+Terminal=false
+Categories=Settings;HardwareSettings;
+Keywords=rgb;argb;led;ene;maxsun;
